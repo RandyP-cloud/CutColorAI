@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
     console.error("Replicate Token missing on server");
-    return res.status(500).json({ error: "Server configuration error" });
+    return res.status(500).json({ error: "Server configuration error: Token missing" });
   }
 
   const replicate = new Replicate({
@@ -30,13 +30,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing prompt or image" });
     }
 
+    // Using SDXL for high quality
     const output = await replicate.run(
       "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
       {
         input: {
           prompt: prompt,
           image: image,
-          strength: 0.75,
+          strength: 0.75, // Adjusts how much to change the original image
           negative_prompt: "distorted face, plastic skin, changed background, blur, low quality, bad anatomy, extra fingers, missing limbs, unnatural colors, wig-like texture, oversaturated, painting, cartoon, doll",
           num_inference_steps: 30,
           guidance_scale: 7.5
@@ -44,6 +45,7 @@ export default async function handler(req, res) {
       }
     );
 
+    // Replicate returns an array, we want the first image URL
     res.status(200).json({ output: output[0] });
 
   } catch (error) {

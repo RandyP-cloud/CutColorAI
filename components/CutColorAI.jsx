@@ -1,30 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Camera, Upload, RefreshCw, Scissors, Palette, Download, Sparkles, User, AlertCircle, Check, Zap, MoveHorizontal, Wand2, Triangle } from 'lucide-react';
 
-const styleGraph = {
-  'short-straight': { neighbors: ['short-wavy', 'pixie', 'bob'] },
-  'short-wavy': { neighbors: ['short-straight', 'short-curly', 'bob'] },
-  'short-curly': { neighbors: ['short-wavy', 'pixie'] },
-  'short-layered': { neighbors: ['short-straight', 'pixie', 'bob'] },
-  'pixie': { neighbors: ['buzz', 'short-layered', 'short-straight'] },
-  'buzz': { neighbors: ['pixie'] },
-  'bob': { neighbors: ['lob', 'short-straight', 'medium-straight'] },
-  'lob': { neighbors: ['bob', 'medium-straight', 'long-straight'] },
-  'medium-straight': { neighbors: ['medium-wavy', 'lob', 'long-straight'] },
-  'medium-wavy': { neighbors: ['medium-straight', 'medium-curly', 'lob'] },
-  'medium-curly': { neighbors: ['medium-wavy', 'medium-layered'] },
-  'medium-layered': { neighbors: ['medium-straight', 'long-layered'] },
-  'long-straight': { neighbors: ['long-wavy', 'medium-straight', 'long-layered'] },
-  'long-wavy': { neighbors: ['long-straight', 'long-curly'] },
-  'long-curly': { neighbors: ['long-wavy', 'long-blowout'] },
-  'long-layered': { neighbors: ['long-straight', 'long-blowout'] },
-  'long-blowout': { neighbors: ['long-layered', 'long-wavy'] },
-  'bangs-curtain': { neighbors: ['bangs-wispy'] },
-  'bangs-full': { neighbors: ['bangs-wispy'] },
-  'bangs-wispy': { neighbors: ['bangs-curtain'] },
-  'bangs-side': { neighbors: ['bangs-curtain'] },
-};
-
 const hairStyles = [
   { id: 'short-straight', label: 'Short Straight', prompt: 'short straight hair', category: 'short' },
   { id: 'short-wavy', label: 'Short Wavy', prompt: 'short wavy hair', category: 'short' },
@@ -117,23 +93,6 @@ const workerCode = `
         reader.readAsDataURL(blobResult);
       } catch (err) { self.postMessage({ type: 'error', id, error: err.message }); }
     }
-    if (type === 'swatch') {
-      const { colors } = payload;
-      const canvas = new OffscreenCanvas(512, 512);
-      const ctx = canvas.getContext('2d');
-      if (colors.length === 0) { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, 512, 512); } 
-      else if (colors.length === 1) { ctx.fillStyle = colors[0].color; ctx.fillRect(0, 0, 512, 512); } 
-      else {
-        const gradient = ctx.createLinearGradient(0, 0, 512, 512);
-        colors.forEach((c, index) => gradient.addColorStop(index / (colors.length - 1), c.color));
-        ctx.fillStyle = gradient;
-        ctx.fillRect(0, 0, 512, 512);
-      }
-      const blobResult = await canvas.convertToBlob({ type: 'image/jpeg' });
-      const reader = new FileReader();
-      reader.onloadend = () => { self.postMessage({ type: 'swatch_result', id, result: reader.result.split(',')[1] }); };
-      reader.readAsDataURL(blobResult);
-    }
   };
 `;
 
@@ -168,7 +127,7 @@ const UploadView = ({ fileInputRef, onFileChange }) => (
   </div>
 );
 
-const EditorView = ({ image, generatedImage, loading, sliderPosition, setSliderPosition, setMode, setImage, downloadImage, suggestedLooks, predicting, applySuggestion, selectedStyles, toggleStyle, groupedColors, selectedColors, toggleColor, customPrompt, setCustomPrompt, error, handleGenerateClick }) => {
+const EditorView = ({ image, generatedImage, loading, sliderPosition, setSliderPosition, setMode, setImage, downloadImage, selectedStyles, toggleStyle, groupedColors, selectedColors, toggleColor, customPrompt, setCustomPrompt, error, handleGenerateClick }) => {
   const imageContainerRef = useRef(null);
   const isDragging = useRef(false);
 
@@ -350,7 +309,7 @@ const CutColorAI = () => {
     
     try {
       const response = await fetch(
-        '/api/generate', // REPLICATE PROXY
+        '/api/generate', 
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -364,7 +323,6 @@ const CutColorAI = () => {
       if (!response.ok) throw new Error(`API Error: ${response.status}`);
       const result = await response.json();
       
-      // Replicate returns a URL
       return result.output;
     } catch (err) {
       console.error(err);
@@ -435,9 +393,6 @@ const CutColorAI = () => {
             setMode={setMode}
             setImage={setImage}
             downloadImage={downloadImage}
-            suggestedLooks={[]}
-            predicting={false}
-            applySuggestion={() => {}}
             selectedStyles={selectedStyles}
             toggleStyle={toggleStyle}
             groupedColors={groupedColors}
