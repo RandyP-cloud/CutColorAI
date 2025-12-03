@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Camera, Upload, RefreshCw, Scissors, Palette, Download, Sparkles, User, AlertCircle, Check, Zap, MoveHorizontal, Wand2, Triangle } from 'lucide-react';
 
-/* --- STYLE GRAPH ONTOLOGY --- */
 const styleGraph = {
   'short-straight': { neighbors: ['short-wavy', 'pixie', 'bob'] },
   'short-wavy': { neighbors: ['short-straight', 'short-curly', 'bob'] },
@@ -98,6 +97,46 @@ const hairColors = [
   { id: 'orig-rainbow', label: 'Rainbow', color: 'linear-gradient(to right, red,orange,yellow,green,blue,indigo,violet)', prompt: 'Rainbow', category: 'Fantasy' },
 ];
 
+const workerCode = `
+  self.onmessage = async (e) => {
+    const { type, payload, id } = e.data;
+    if (type === 'resize') {
+      const { dataUrl, maxWidth, maxHeight } = payload;
+      try {
+        const blob = await fetch(dataUrl).then(r => r.blob());
+        const bitmap = await createImageBitmap(blob);
+        let width = bitmap.width, height = bitmap.height;
+        if (width > height) { if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; } } 
+        else { if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; } }
+        const canvas = new OffscreenCanvas(width, height);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(bitmap, 0, 0, width, height);
+        const blobResult = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+        const reader = new FileReader();
+        reader.onloadend = () => self.postMessage({ type: 'resize_result', id, result: reader.result });
+        reader.readAsDataURL(blobResult);
+      } catch (err) { self.postMessage({ type: 'error', id, error: err.message }); }
+    }
+    if (type === 'swatch') {
+      const { colors } = payload;
+      const canvas = new OffscreenCanvas(512, 512);
+      const ctx = canvas.getContext('2d');
+      if (colors.length === 0) { ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, 512, 512); } 
+      else if (colors.length === 1) { ctx.fillStyle = colors[0].color; ctx.fillRect(0, 0, 512, 512); } 
+      else {
+        const gradient = ctx.createLinearGradient(0, 0, 512, 512);
+        colors.forEach((c, index) => gradient.addColorStop(index / (colors.length - 1), c.color));
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, 512, 512);
+      }
+      const blobResult = await canvas.convertToBlob({ type: 'image/jpeg' });
+      const reader = new FileReader();
+      reader.onloadend = () => { self.postMessage({ type: 'swatch_result', id, result: reader.result.split(',')[1] }); };
+      reader.readAsDataURL(blobResult);
+    }
+  };
+`;
+
 const Header = ({ resetApp }) => (
   <header className="flex items-center justify-between py-4 px-6 bg-white/80 backdrop-blur-md sticky top-0 z-50 border-b border-gray-100">
     <div className="flex items-center space-x-2 text-rose-600">
@@ -165,12 +204,12 @@ const EditorView = ({ image, generatedImage, loading, sliderPosition, setSliderP
           )}
           <img src={generatedImage || image} alt="Result" className="absolute inset-0 w-full h-full object-cover" />
           {generatedImage && (
-            <div className="absolute inset-0 w-full h-full overflow-hidden border-r-2 border-white shadow-[2px_0_10px_rgba(0,0,0,0.3)]" style={{ width: \`\${sliderPosition}%\` }}>
-              <img src={image} alt="Original" className="absolute inset-0 w-full h-full object-cover max-w-none" style={{ width: imageContainerRef.current ? \`\${imageContainerRef.current.clientWidth}px\` : '100%' }} />
+            <div className="absolute inset-0 w-full h-full overflow-hidden border-r-2 border-white shadow-[2px_0_10px_rgba(0,0,0,0.3)]" style={{ width: `${sliderPosition}%` }}>
+              <img src={image} alt="Original" className="absolute inset-0 w-full h-full object-cover max-w-none" style={{ width: imageContainerRef.current ? `${imageContainerRef.current.clientWidth}px` : '100%' }} />
             </div>
           )}
           {generatedImage && !loading && (
-            <div className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize flex items-center justify-center shadow-[0_0_10px_rgba(0,0,0,0.5)] z-10" style={{ left: \`\${sliderPosition}%\` }}>
+            <div className="absolute top-0 bottom-0 w-1 bg-white cursor-ew-resize flex items-center justify-center shadow-[0_0_10px_rgba(0,0,0,0.5)] z-10" style={{ left: `${sliderPosition}%` }}>
               <div className="w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-gray-400"><MoveHorizontal size={16} /></div>
             </div>
           )}
@@ -193,7 +232,7 @@ const EditorView = ({ image, generatedImage, loading, sliderPosition, setSliderP
                 <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">{category} {category === 'bangs' ? '' : 'Haircuts'}</h4>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {hairStyles.filter(style => style.category === category).map((style) => (
-                    <button key={style.id} onClick={() => toggleStyle(style.id)} className={\`px-4 py-3 rounded-xl text-sm font-medium transition-all border-2 text-left \${selectedStyles.includes(style.id) ? 'border-rose-500 bg-rose-50 text-rose-700 shadow-sm' : 'border-transparent bg-gray-100 text-gray-600 hover:bg-gray-200'}\`}>{style.label}</button>
+                    <button key={style.id} onClick={() => toggleStyle(style.id)} className={`px-4 py-3 rounded-xl text-sm font-medium transition-all border-2 text-left ${selectedStyles.includes(style.id) ? 'border-rose-500 bg-rose-50 text-rose-700 shadow-sm' : 'border-transparent bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{style.label}</button>
                   ))}
                 </div>
               </div>
@@ -209,9 +248,9 @@ const EditorView = ({ image, generatedImage, loading, sliderPosition, setSliderP
                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">{category}</h4>
                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-3">
                       {colors.map((color) => (
-                         <button key={color.id} onClick={() => toggleColor(color.id)} className={\`group relative flex flex-col items-center space-y-2 p-2 rounded-xl transition-all border-2 text-center h-full \${selectedColors.includes(color.id) ? 'border-rose-500 bg-rose-50' : 'border-transparent hover:bg-gray-100'}\`} title={color.prompt}>
+                         <button key={color.id} onClick={() => toggleColor(color.id)} className={`group relative flex flex-col items-center space-y-2 p-2 rounded-xl transition-all border-2 text-center h-full ${selectedColors.includes(color.id) ? 'border-rose-500 bg-rose-50' : 'border-transparent hover:bg-gray-100'}`} title={color.prompt}>
                             <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full shadow-sm ring-2 ring-white shrink-0" style={{ background: color.color }}></div>
-                            <span className={\`text-[10px] font-medium leading-tight w-full line-clamp-2 \${selectedColors.includes(color.id) ? 'text-rose-700' : 'text-gray-500'}\`}>{color.label}</span>
+                            <span className={`text-[10px] font-medium leading-tight w-full line-clamp-2 ${selectedColors.includes(color.id) ? 'text-rose-700' : 'text-gray-500'}`}>{color.label}</span>
                             {selectedColors.includes(color.id) && <div className="absolute top-1 right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center"><Check size={10} className="text-white" /></div>}
                          </button>
                       ))}
@@ -228,7 +267,7 @@ const EditorView = ({ image, generatedImage, loading, sliderPosition, setSliderP
 
         {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl flex items-start space-x-3"><AlertCircle size={20} className="shrink-0 mt-0.5" /><p className="text-sm">{error}</p></div>}
 
-        <button onClick={handleGenerateClick} disabled={loading} className={\`w-full py-4 px-6 rounded-2xl text-white font-bold text-lg shadow-lg transform transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-2 \${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700'}\`}>
+        <button onClick={handleGenerateClick} disabled={loading} className={`w-full py-4 px-6 rounded-2xl text-white font-bold text-lg shadow-lg transform transition-all hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center space-x-2 ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700'}`}>
           {loading ? <span>Generating...</span> : <> <Sparkles size={20} /> <span>Generate Look</span> </>}
         </button>
       </div>
@@ -351,10 +390,20 @@ const CutColorAI = () => {
     if (file) {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        setImage(e.target.result); // Simple read for now
-        setMode('editor');
-        setGeneratedImage(null);
-        setSliderPosition(50);
+        // Use Worker for Resizing
+        const blob = new Blob([workerCode], { type: 'application/javascript' });
+        const worker = new Worker(URL.createObjectURL(blob));
+        
+        worker.onmessage = (event) => {
+            if (event.data.type === 'resize_result') {
+                setImage(event.data.result);
+                setMode('editor');
+                setGeneratedImage(null);
+                setSliderPosition(50);
+                worker.terminate();
+            }
+        };
+        worker.postMessage({ type: 'resize', payload: { dataUrl: e.target.result, maxWidth: 1024, maxHeight: 1024 } });
       };
       reader.readAsDataURL(file);
     }

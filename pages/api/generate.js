@@ -30,14 +30,13 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing prompt or image" });
     }
 
-    // Using Stable Diffusion XL (SDXL) for high quality
     const output = await replicate.run(
       "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
       {
         input: {
           prompt: prompt,
-          image: image, // Base64 or URL
-          strength: 0.75, // How much to change the image (0-1)
+          image: image,
+          strength: 0.75,
           negative_prompt: "distorted face, plastic skin, changed background, blur, low quality, bad anatomy, extra fingers, missing limbs, unnatural colors, wig-like texture, oversaturated, painting, cartoon, doll",
           num_inference_steps: 30,
           guidance_scale: 7.5
@@ -45,7 +44,6 @@ export default async function handler(req, res) {
       }
     );
 
-    // Replicate returns an array of URLs: ["https://..."]
     res.status(200).json({ output: output[0] });
 
   } catch (error) {
