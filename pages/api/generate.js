@@ -1,3 +1,5 @@
+import Replicate from "replicate";
+
 export const config = {
   api: {
     bodyParser: {
@@ -11,45 +13,43 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.error("API Key missing on server");
+  const token = process.env.REPLICATE_API_TOKEN;
+  if (!token) {
+    console.error("Replicate Token missing on server");
     return res.status(500).json({ error: "Server configuration error" });
   }
 
-  try {
-    const { contents, systemInstruction, generationConfig } = req.body;
+  const replicate = new Replicate({
+    auth: token,
+  });
 
-    if (!contents || !contents[0] || !contents[0].parts) {
-      return res.status(400).json({ error: "Invalid payload structure" });
+  try {
+    const { prompt, image } = req.body;
+
+    if (!prompt || !image) {
+      return res.status(400).json({ error: "Missing prompt or image" });
     }
 
-    const cleanPayload = {
-      contents,
-      systemInstruction,
-      generationConfig,
-    };
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image-preview:generateContent?key=${apiKey}`,
+    // Using Stable Diffusion XL (SDXL) for high quality
+    const output = await replicate.run(
+      "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
       {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cleanPayload)
+        input: {
+          prompt: prompt,
+          image: image, // Base64 or URL
+          strength: 0.75, // How much to change the image (0-1)
+          negative_prompt: "distorted face, plastic skin, changed background, blur, low quality, bad anatomy, extra fingers, missing limbs, unnatural colors, wig-like texture, oversaturated, painting, cartoon, doll",
+          num_inference_steps: 30,
+          guidance_scale: 7.5
+        }
       }
     );
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Gemini API Error:", errorData);
-      return res.status(response.status).json({ error: "AI Generation Failed", details: errorData });
-    }
-
-    const data = await response.json();
-    res.status(200).json(data);
+    // Replicate returns an array of URLs: ["https://..."]
+    res.status(200).json({ output: output[0] });
 
   } catch (error) {
-    console.error("Proxy Error:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error("Replicate Error:", error);
+    res.status(500).json({ error: "Generation Failed", details: error.message });
   }
 }
