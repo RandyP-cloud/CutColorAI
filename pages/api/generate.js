@@ -5,6 +5,8 @@ export const config = {
     bodyParser: {
       sizeLimit: '10mb',
     },
+    // Increase timeout setting for Vercel Pro users (doesn't hurt Free users)
+    maxDuration: 60, 
   },
 };
 
@@ -16,7 +18,7 @@ export default async function handler(req, res) {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
     console.error("Replicate Token missing on server");
-    return res.status(500).json({ error: "Server configuration error: Token missing" });
+    return res.status(500).json({ error: "Server Error: Missing API Key" });
   }
 
   const replicate = new Replicate({
@@ -30,26 +32,35 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing prompt or image" });
     }
 
-    // Using SDXL for high quality
+    console.log("Starting generation with SDXL Lightning...");
+
+    // Switched to SDXL Lightning (4-step) for <3 second generation
     const output = await replicate.run(
-      "stability-ai/sdxl:39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b",
+      "bytedance/sdxl-lightning-4step:727e49a643e999d602a896c774a01d74f0436936cbf1672322d7a22df9557436",
       {
         input: {
           prompt: prompt,
           image: image,
-          strength: 0.75, // Adjusts how much to change the original image
+          strength: 0.75, 
           negative_prompt: "distorted face, plastic skin, changed background, blur, low quality, bad anatomy, extra fingers, missing limbs, unnatural colors, wig-like texture, oversaturated, painting, cartoon, doll",
-          num_inference_steps: 30,
-          guidance_scale: 7.5
+          num_inference_steps: 4, // Extremely fast
+          guidance_scale: 0 // Lightning specific setting
         }
       }
     );
 
-    // Replicate returns an array, we want the first image URL
+    console.log("Generation successful:", output);
+    
+    // Check if output is valid
+    if (!output || !output[0]) {
+        throw new Error("Replicate returned empty output");
+    }
+
     res.status(200).json({ output: output[0] });
 
   } catch (error) {
     console.error("Replicate Error:", error);
+    // Return the actual error message so you can see it in the browser console
     res.status(500).json({ error: "Generation Failed", details: error.message });
   }
 }

@@ -320,13 +320,23 @@ const CutColorAI = () => {
         }
       );
 
-      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      // Check if response is not ok (e.g. 500, 404, 504)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})); // try to parse JSON
+        const errorMessage = errorData.details || errorData.error || `Server Error: ${response.status}`;
+        throw new Error(errorMessage);
+      }
+
       const result = await response.json();
       
+      if (!result.output) {
+         throw new Error("AI generated no output (try again)");
+      }
+
       return result.output;
     } catch (err) {
       console.error(err);
-      return null;
+      throw err; // Rethrow to let the UI handle it
     }
   };
 
@@ -334,11 +344,14 @@ const CutColorAI = () => {
     if (!image) return;
     setLoading(true);
     setError(null);
-    const result = await generateHairInternal(selectedStyles, selectedColors, customPrompt);
-    if (result) {
-      setGeneratedImage(result);
-    } else {
-      setError("Generation failed. Please try again.");
+    try {
+        const result = await generateHairInternal(selectedStyles, selectedColors, customPrompt);
+        if (result) {
+            setGeneratedImage(result);
+        }
+    } catch (err) {
+        // Capture the actual error message
+        setError(err.message || "Generation failed. Please try again.");
     }
     setLoading(false);
   };
